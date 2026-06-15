@@ -1,0 +1,26 @@
+name: meds_flutter_no_python
+description: Full Flutter MEDS app - camera emotion detection + ESP32 sensor, no Python runtime.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.12.0+1
+  tflite_flutter: ^0.12.1
+  http: ^1.2.2
+  image: ^4.2.0
+  intl: ^0.19.0
+  supabase_flutter: ^2.12.4
+  fl_chart: ^0.69.0
+  image_picker: ^1.1.2
+  shared_preferences: ^2.2.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/model.tflite
+    - assets/labels.txt

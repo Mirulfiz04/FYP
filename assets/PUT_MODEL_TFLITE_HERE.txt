@@ -1,0 +1,1 @@
+Run tools/convert_h5_to_tflite.py on your PC to create assets/model.tflite.
