@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
-import 'admin/admin_home_screen.dart';
+import 'admin/admin_shell.dart';
 
 /// After sign-in, loads the user's profile and routes to the correct app:
 /// the admin panel for `role = 'admin'`, a blocked notice for disabled
@@ -22,6 +22,7 @@ class _RoleRouterState extends State<RoleRouter> {
   bool _loading = true;
   bool _isAdmin = false;
   bool _isBlocked = false;
+  bool _isInactive = false;
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _RoleRouterState extends State<RoleRouter> {
       setState(() {
         _isAdmin = profile.isAdmin;
         _isBlocked = profile.isBlocked;
+        _isInactive = profile.isInactive;
         _loading = false;
       });
     } catch (_) {
@@ -51,17 +53,28 @@ class _RoleRouterState extends State<RoleRouter> {
         body: Center(child: CircularProgressIndicator(color: medsGreen)),
       );
     }
-    if (_isBlocked) return const _BlockedScreen();
-    if (_isAdmin) return const AdminHomeScreen();
+    // An administrator can disable an account by blocking OR deactivating it;
+    // both keep the user out of the app until re-enabled.
+    if (_isBlocked || _isInactive) {
+      return _DisabledScreen(blocked: _isBlocked);
+    }
+    if (_isAdmin) return const AdminShell();
     return MainShell(cameras: widget.cameras);
   }
 }
 
-class _BlockedScreen extends StatelessWidget {
-  const _BlockedScreen();
+class _DisabledScreen extends StatelessWidget {
+  final bool blocked;
+  const _DisabledScreen({required this.blocked});
 
   @override
   Widget build(BuildContext context) {
+    final title = blocked ? 'Account blocked' : 'Account deactivated';
+    final message = blocked
+        ? 'Your account has been blocked by an administrator. Please contact '
+            'support if you believe this is a mistake.'
+        : 'Your account has been deactivated by an administrator. Please '
+            'contact support to have it reactivated.';
     return Scaffold(
       body: Center(
         child: Padding(
@@ -69,18 +82,19 @@ class _BlockedScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.block, size: 72, color: Colors.red.shade400),
+              Icon(blocked ? Icons.block : Icons.pause_circle_outline,
+                  size: 72, color: Colors.red.shade400),
               const SizedBox(height: 16),
-              const Text(
-                'Account blocked',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              Text(
+                title,
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Your account has been disabled by an administrator. '
-                'Please contact support if you believe this is a mistake.',
+              Text(
+                message,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+                style: const TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 24),
               OutlinedButton.icon(

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/admin_service.dart';
-import '../../services/esp32_sensor_service.dart';
+import '../../services/sensor_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/ui_kit.dart';
 
 enum _Health { checking, ok, warn, fail }
 
@@ -113,7 +115,7 @@ class _AdminStatusScreenState extends State<AdminStatusScreen> {
 
   Future<void> _checkSensor() async {
     try {
-      final r = await Esp32SensorService().fetchReading();
+      final r = await createSensorService().fetchReading();
       _set(_sensor, _Health.ok, 'Online · HR ${r.hr} bpm');
     } catch (_) {
       _set(_sensor, _Health.warn, 'Offline (optional hardware)');
@@ -142,11 +144,11 @@ class _AdminStatusScreenState extends State<AdminStatusScreen> {
     final allOk = checks.every((c) => c.$3.health == _Health.ok);
     final anyFail = checks.any((c) => c.$3.health == _Health.fail);
     final overall = anyFail
-        ? (const Color(0xFFFF5050), 'Issues detected', Icons.error_outline)
+        ? (MedsColors.red, 'Issues detected', Icons.error_outline)
         : allOk
-            ? (const Color(0xFF00DC64), 'All systems operational',
+            ? (MedsColors.green, 'All systems operational',
                 Icons.check_circle_outline)
-            : (const Color(0xFFFFA500), 'Running with warnings',
+            : (MedsColors.amber, 'Running with warnings',
                 Icons.warning_amber_rounded);
 
     return Scaffold(
@@ -222,44 +224,42 @@ class _CheckRow extends StatelessWidget {
             width: 18,
             child: CircularProgressIndicator(strokeWidth: 2));
       case _Health.ok:
-        return const Icon(Icons.check_circle, color: Color(0xFF00DC64));
+        return const Icon(Icons.check_circle, color: MedsColors.green);
       case _Health.warn:
         return const Icon(Icons.warning_amber_rounded,
-            color: Color(0xFFFFA500));
+            color: MedsColors.amber);
       case _Health.fail:
-        return const Icon(Icons.cancel, color: Color(0xFFFF5050));
+        return const Icon(Icons.cancel, color: MedsColors.red);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.grey),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(check.detail,
-                    style: const TextStyle(color: Colors.grey, fontSize: 12)),
-              ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppCard(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(icon, color: MedsColors.muted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(check.detail,
+                      style: const TextStyle(
+                          color: MedsColors.muted, fontSize: 12)),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          _trailing(),
-        ],
+            const SizedBox(width: 12),
+            _trailing(),
+          ],
+        ),
       ),
     );
   }

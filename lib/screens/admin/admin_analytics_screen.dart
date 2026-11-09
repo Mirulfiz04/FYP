@@ -1,6 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../services/admin_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/ui_kit.dart';
 import '../emotion_analytics_screen.dart';
 
 class AdminAnalyticsScreen extends StatefulWidget {
@@ -33,16 +35,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     }
   }
 
-  Color _emotionColor(String e) => switch (e) {
-        'Happy' => const Color(0xFF00DC64),
-        'Sad' => const Color(0xFF5578C8),
-        'Angry' => const Color(0xFFFF3232),
-        'Fear' => const Color(0xFF9B30FF),
-        'Surprise' => const Color(0xFF00FFFF),
-        'Disgust' => const Color(0xFFFFA500),
-        'Neutral' => const Color(0xFFB4B4B4),
-        _ => Colors.grey,
-      };
+  Color _emotionColor(String e) => MedsColors.emotion(e);
 
   String _fmtDuration(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -72,12 +65,15 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      _section('USAGE'),
+                      const SectionHeader(
+                          title: 'Usage',
+                          icon: Icons.bar_chart,
+                          color: MedsColors.blue),
                       GridView.count(
                         crossAxisCount: 2,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        childAspectRatio: 1.7,
+                        childAspectRatio: 1.55,
                         mainAxisSpacing: 12,
                         crossAxisSpacing: 12,
                         children: [
@@ -120,10 +116,16 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      _section('EMOTION DISTRIBUTION'),
+                      const SectionHeader(
+                          title: 'Emotion distribution',
+                          icon: Icons.pie_chart_outline,
+                          color: MedsColors.purple),
                       _card(child: _emotionChart(s)),
                       const SizedBox(height: 24),
-                      _section('BY USER — WHO FELT WHAT'),
+                      const SectionHeader(
+                          title: 'By user — who felt what',
+                          icon: Icons.people_alt_outlined,
+                          color: MedsColors.teal),
                       _perUserList(s),
                     ],
                   ),
@@ -146,16 +148,13 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
       children: s.perUser.map((u) {
         final color = _emotionColor(u.dominantEmotion);
         final tappable = u.userId != null;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Theme.of(context).dividerColor),
-          ),
-          child: ListTile(
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: AppCard(
+            padding: const EdgeInsets.all(6),
+            child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: const Color(0xFF00DC64).withValues(alpha: 0.15),
+              backgroundColor: medsGreen.withValues(alpha: 0.15),
               backgroundImage:
                   (u.avatarUrl != null && u.avatarUrl!.isNotEmpty)
                       ? NetworkImage(u.avatarUrl!)
@@ -180,18 +179,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 ],
               ],
             ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(u.dominantEmotion,
-                  style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11)),
-            ),
+            trailing: Pill(text: u.dominantEmotion, color: color),
             onTap: tappable
                 ? () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -203,6 +191,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       ),
                     )
                 : null,
+            ),
           ),
         );
       }).toList(),
@@ -286,49 +275,31 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     );
   }
 
-  Widget _section(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 10, left: 2),
-        child: Text(text,
-            style: const TextStyle(
-                color: Colors.grey,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                letterSpacing: 1)),
-      );
-
   Widget _stat(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
+    return AppCard(
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(height: 8),
           Text(value,
               style:
                   const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          Text(label,
+              style: const TextStyle(color: MedsColors.muted, fontSize: 12)),
         ],
       ),
     );
   }
 
-  Widget _card({required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: child,
-    );
-  }
+  Widget _card({required Widget child}) => AppCard(child: child);
 }

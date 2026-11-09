@@ -3,6 +3,9 @@ import 'package:intl/intl.dart';
 import '../models/detection_session.dart';
 import '../models/emotion_reading.dart';
 import '../services/supabase_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/session_ai_summary_card.dart';
+import '../widgets/ui_kit.dart';
 
 class SessionsScreen extends StatefulWidget {
   const SessionsScreen({super.key});
@@ -49,19 +52,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF00DC64)))
           : _sessions.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No sessions yet.\nStart one from the Home tab.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 15),
-                  ),
+              ? const EmptyState(
+                  icon: Icons.event_note_outlined,
+                  title: 'No sessions yet',
+                  message: 'Start your first detection session from the Home '
+                      'tab and it will show up here.',
+                  color: MedsColors.blue,
                 )
               : RefreshIndicator(
                   onRefresh: _load,
-                  child: ListView.separated(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
                     itemCount: _sessions.length,
-                    separatorBuilder: (_, __) =>
-                        Divider(height: 1, color: Theme.of(context).dividerColor),
                     itemBuilder: (context, i) =>
                         _SessionTile(session: _sessions[i]),
                   ),
@@ -96,28 +98,50 @@ class _SessionTile extends StatelessWidget {
     final durationText =
         session.endTime != null ? _fmtDuration(session.duration) : 'In progress';
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.15),
-        child: Icon(Icons.psychology, color: color),
-      ),
-      title: Text(started, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text('Duration: $durationText',
-          style: const TextStyle(color: Colors.grey, fontSize: 12)),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppCard(
+        padding: const EdgeInsets.all(14),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+              builder: (_) => SessionDetailScreen(session: session)),
         ),
-        child: Text(
-          session.status.toUpperCase(),
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.bold, fontSize: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(Icons.psychology, color: color),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(started,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14.5)),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(Icons.schedule,
+                          size: 13, color: MedsColors.muted),
+                      const SizedBox(width: 4),
+                      Text(durationText,
+                          style: const TextStyle(
+                              color: MedsColors.muted, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Pill(text: session.status.toUpperCase(), color: color),
+          ],
         ),
-      ),
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => SessionDetailScreen(session: session)),
       ),
     );
   }
@@ -125,7 +149,16 @@ class _SessionTile extends StatelessWidget {
 
 class SessionDetailScreen extends StatefulWidget {
   final DetectionSession session;
-  const SessionDetailScreen({super.key, required this.session});
+
+  /// When true (e.g. opened from an "AI insight ready" notification), the view
+  /// scrolls to the AI Summary section after loading.
+  final bool scrollToAi;
+
+  const SessionDetailScreen({
+    super.key,
+    required this.session,
+    this.scrollToAi = false,
+  });
 
   @override
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
@@ -133,6 +166,7 @@ class SessionDetailScreen extends StatefulWidget {
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
   final _svc = SupabaseService();
+  final _aiKey = GlobalKey();
   List<EmotionReading> _readings = [];
   bool _loading = true;
 
@@ -150,10 +184,22 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           _readings = data;
           _loading = false;
         });
+        _maybeScrollToAi();
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _maybeScrollToAi() {
+    if (!widget.scrollToAi) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _aiKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx,
+            duration: const Duration(milliseconds: 400), alignment: 0.1);
+      }
+    });
   }
 
   MapEntry<String, int>? get _dominant {
@@ -214,14 +260,17 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   ),
                 ]),
                 const SizedBox(height: 16),
+                Container(
+                  key: _aiKey,
+                  child: SessionAiSummaryCard(session: widget.session),
+                ),
                 if (_readings.isNotEmpty) ...[
-                  const Text('READINGS',
-                      style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
+                  const SectionHeader(
+                    title: 'Readings',
+                    icon: Icons.list_alt,
+                    color: MedsColors.blue,
+                  ),
                   ..._readings.map((r) => ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
@@ -251,17 +300,8 @@ class _DetailCard extends StatelessWidget {
   const _DetailCard({required this.children});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(children: children),
-    );
-  }
+  Widget build(BuildContext context) =>
+      AppCard(child: Column(children: children));
 }
 
 class _DetailRow extends StatelessWidget {
@@ -291,6 +331,68 @@ class _DetailRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Loads a session by id then shows [SessionDetailScreen]. Used by notification
+/// deep links, which only carry the `sessionId`.
+class SessionDetailLoaderScreen extends StatefulWidget {
+  final String sessionId;
+  final bool scrollToAi;
+
+  const SessionDetailLoaderScreen({
+    super.key,
+    required this.sessionId,
+    this.scrollToAi = false,
+  });
+
+  @override
+  State<SessionDetailLoaderScreen> createState() =>
+      _SessionDetailLoaderScreenState();
+}
+
+class _SessionDetailLoaderScreenState extends State<SessionDetailLoaderScreen> {
+  final _svc = SupabaseService();
+  DetectionSession? _session;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final s = await _svc.fetchSession(widget.sessionId);
+      if (mounted) setState(() => _session = s);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not open session: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Session details')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(_error!, textAlign: TextAlign.center),
+          ),
+        ),
+      );
+    }
+    if (_session == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF00DC64))),
+      );
+    }
+    return SessionDetailScreen(
+      session: _session!,
+      scrollToAi: widget.scrollToAi,
     );
   }
 }

@@ -5,6 +5,7 @@ import '../../models/detection_session.dart';
 import '../../models/emotion_reading.dart';
 import '../../models/user_profile.dart';
 import '../../services/admin_service.dart';
+import '../../widgets/ui_kit.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
@@ -184,14 +185,7 @@ ${emotionLines.isEmpty ? '  - none' : emotionLines}
                   style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                  ),
+                AppCard(
                   child: SelectableText(
                     _summary,
                     style: const TextStyle(

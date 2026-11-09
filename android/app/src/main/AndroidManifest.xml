@@ -2,10 +2,32 @@
     <!-- Camera for emotion detection -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Microphone for the "Are you OK?" voice check-in (3 s, never stored) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Network for Supabase + ESP32 sensor -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Lets us find the Wi-Fi network and pin the ESP32 request to it even
+         when mobile data is the default route. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Bluetooth-LE transport for the ESP32 sensor. SCAN declares
+         neverForLocation so we don't need location on Android 12+. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Legacy Bluetooth permissions for Android 11 and below. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-feature android:name="android.hardware.bluetooth_le"
+        android:required="false" />
+    <!-- Local notifications (session complete, AI insight, weekly trend).
+         Required for OS notifications on Android 13+ (API 33). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="meds_flutter_no_python"
+        android:label="MEDS"
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">

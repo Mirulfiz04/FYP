@@ -1,8 +1,11 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../services/emotion_classifier.dart';
-import '../services/esp32_sensor_service.dart';
+import '../services/sensor_service.dart';
 import '../services/supabase_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/animated_fun.dart';
+import '../widgets/ui_kit.dart';
 import 'dashboard_screen.dart';
 
 enum _CheckStatus { checking, ok, warn, fail }
@@ -98,7 +101,7 @@ class _DeviceCheckScreenState extends State<DeviceCheckScreen> {
 
   Future<void> _checkSensor() async {
     try {
-      final reading = await Esp32SensorService().fetchReading();
+      final reading = await createSensorService().fetchReading();
       setState(() {
         _sensor.status = _CheckStatus.ok;
         _sensor.detail = 'ESP32 connected (HR ${reading.hr} bpm)';
@@ -173,25 +176,37 @@ class _DeviceCheckScreenState extends State<DeviceCheckScreen> {
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 20),
-            _CheckRow(
-              icon: Icons.camera_alt_outlined,
-              title: 'Camera',
-              item: _camera,
+            FadeSlideIn(
+              delay: const Duration(milliseconds: 60),
+              child: _CheckRow(
+                icon: Icons.camera_alt_outlined,
+                title: 'Camera',
+                item: _camera,
+              ),
             ),
-            _CheckRow(
-              icon: Icons.memory,
-              title: 'Emotion model',
-              item: _model,
+            FadeSlideIn(
+              delay: const Duration(milliseconds: 140),
+              child: _CheckRow(
+                icon: Icons.memory,
+                title: 'Emotion model',
+                item: _model,
+              ),
             ),
-            _CheckRow(
-              icon: Icons.cloud_outlined,
-              title: 'Cloud connection',
-              item: _cloud,
+            FadeSlideIn(
+              delay: const Duration(milliseconds: 220),
+              child: _CheckRow(
+                icon: Icons.cloud_outlined,
+                title: 'Cloud connection',
+                item: _cloud,
+              ),
             ),
-            _CheckRow(
-              icon: Icons.bluetooth_connected,
-              title: 'Heart-rate sensor (optional)',
-              item: _sensor,
+            FadeSlideIn(
+              delay: const Duration(milliseconds: 300),
+              child: _CheckRow(
+                icon: Icons.bluetooth_connected,
+                title: 'Heart-rate sensor (optional)',
+                item: _sensor,
+              ),
             ),
             const SizedBox(height: 20),
             if (!_stillChecking && !_requiredPassed)
@@ -263,50 +278,56 @@ class _CheckRow extends StatelessWidget {
     switch (item.status) {
       case _CheckStatus.checking:
         return const SizedBox(
+          key: ValueKey('checking'),
           height: 18,
           width: 18,
           child: CircularProgressIndicator(strokeWidth: 2),
         );
       case _CheckStatus.ok:
-        return const Icon(Icons.check_circle, color: Color(0xFF00DC64));
+        return const Icon(Icons.check_circle,
+            key: ValueKey('ok'), color: MedsColors.green);
       case _CheckStatus.warn:
         return const Icon(Icons.warning_amber_rounded,
-            color: Color(0xFFFFA500));
+            key: ValueKey('warn'), color: MedsColors.amber);
       case _CheckStatus.fail:
-        return const Icon(Icons.cancel, color: Color(0xFFFF5050));
+        return const Icon(Icons.cancel,
+            key: ValueKey('fail'), color: MedsColors.red);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.grey),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(item.detail,
-                    style:
-                        const TextStyle(color: Colors.grey, fontSize: 12)),
-              ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppCard(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(icon, color: MedsColors.muted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(item.detail,
+                      style: const TextStyle(
+                          color: MedsColors.muted, fontSize: 12)),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          _trailing(),
-        ],
+            const SizedBox(width: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              switchInCurve: Curves.elasticOut,
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: _trailing(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -320,16 +341,12 @@ class _ConsentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
       child: CheckboxListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         controlAffinity: ListTileControlAffinity.leading,
+        activeColor: MedsColors.greenDark,
         value: value,
         onChanged: onChanged,
         title: const Text('I consent to this session',

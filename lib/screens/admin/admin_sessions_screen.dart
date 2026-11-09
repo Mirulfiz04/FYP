@@ -1,22 +1,59 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../models/detection_session.dart';
-import '../../models/user_profile.dart';
-import '../../services/admin_service.dart';
-import '../sessions_screen.dart';
 
+import '../../models/admin_sessions_model.dart';
+import '../../services/admin_sessions_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/admin/admin_header.dart';
+import '../../widgets/admin/admin_tab_chip.dart';
+import '../../widgets/admin/dashboard_metric_card.dart';
+import '../../widgets/admin/monitor_session_card.dart';
+import '../../widgets/ui_kit.dart';
+import 'admin_session_detail_screen.dart';
+
+enum _SessionTab { all, live, completed, flagged }
+
+extension _SessionTabInfo on _SessionTab {
+  String get title => switch (this) {
+        _SessionTab.all => 'All',
+        _SessionTab.live => 'Live',
+        _SessionTab.completed => 'Completed',
+        _SessionTab.flagged => 'Flagged',
+      };
+  ActivityStatus? get status => switch (this) {
+        _SessionTab.all => null,
+        _SessionTab.live => ActivityStatus.live,
+        _SessionTab.completed => ActivityStatus.completed,
+        _SessionTab.flagged => ActivityStatus.flagged,
+      };
+}
+
+/// Admin "Monitor Sessions" — the Sessions tab of the admin shell. Loads
+/// through [AdminSessionsSource]; no Supabase calls live in the widgets.
 class AdminSessionsScreen extends StatefulWidget {
-  const AdminSessionsScreen({super.key});
+  /// Injected in tests; defaults to the real service.
+  final AdminSessionsSource? source;
+
+  /// Provided by the shell so the back arrow can return to the dashboard.
+  final ValueChanged<int>? onOpenTab;
+
+  const AdminSessionsScreen({super.key, this.source, this.onOpenTab});
 
   @override
   State<AdminSessionsScreen> createState() => _AdminSessionsScreenState();
 }
 
 class _AdminSessionsScreenState extends State<AdminSessionsScreen> {
-  final _admin = AdminService();
-  List<DetectionSession> _sessions = [];
-  Map<String, UserProfile> _users = {};
+  late final AdminSessionsSource _source =
+      widget.source ?? AdminSessionsService();
+  final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
+
+  MonitorSessionsData? _data;
   bool _loading = true;
+  bool _busy = false;
+  Object? _error;
+  _SessionTab _tab = _SessionTab.all;
+  String _query = '';
 
   @override
   void initState() {
@@ -24,125 +61,356 @@ class _AdminSessionsScreenState extends State<AdminSessionsScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      if (_data == null) _loading = true;
+      _error = null;
+    });
     try {
-      final users = await _admin.fetchAllUsers();
-      final sessions = await _admin.fetchAllSessions();
+      final data = await _source.fetchSessions();
+      if (!mounted) return;
+      setState(() => _data = data);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    } finally {
       if (mounted) {
         setState(() {
-          _users = {for (final u in users) u.id: u};
-          _sessions = sessions;
           _loading = false;
+          _busy = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
-  String _label(String userId) {
-    final u = _users[userId];
-    if (u == null) return userId;
-    return u.name?.isNotEmpty == true ? u.name! : (u.email ?? userId);
+  List<MonitorSession> get _filtered {
+    final d = _data;
+    if (d == null) return const [];
+    return d.sessions.where((s) {
+      if (_tab.status != null && s.status != _tab.status) return false;
+      return s.matches(_query.trim());
+    }).toList();
   }
 
-  Color _statusColor(String status) => switch (status) {
-        'completed' => const Color(0xFF00DC64),
-        'active' => const Color(0xFF00B4FF),
-        'cancelled' => const Color(0xFFFF5050),
-        _ => Colors.grey,
-      };
+  void _back() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      widget.onOpenTab?.call(0);
+    }
+  }
 
-  String _duration(DetectionSession s) {
-    if (s.endTime == null) return 'In progress';
-    final d = s.duration;
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final sec = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return d.inHours > 0 ? '${d.inHours}h ${m}m' : '${m}m ${sec}s';
+  void _open(MonitorSession s) {
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+            builder: (_) => AdminSessionDetailScreen(
+                  session: s.session,
+                  userName: s.userName,
+                  avatarUrl: s.avatarUrl,
+                  initials: s.initials,
+                )))
+        .then((_) {
+      if (mounted) _load();
+    });
+  }
+
+  Future<void> _openFilter() async {
+    final picked = await showModalBottomSheet<_SessionTab>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Filter by status',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
+            ..._SessionTab.values.map((t) => ListTile(
+                  leading: Icon(
+                    t == _SessionTab.all ? Icons.list_alt : Icons.circle,
+                    size: t == _SessionTab.all ? 22 : 12,
+                    color: t.status == null
+                        ? MedsColors.muted
+                        : sessionStatusColor(t.status!),
+                  ),
+                  title: Text(t == _SessionTab.all ? 'All sessions' : t.title),
+                  trailing: _tab == t
+                      ? const Icon(Icons.check, color: MedsColors.purple)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, t),
+                )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _tab = picked);
   }
 
   @override
   Widget build(BuildContext context) {
-    final active = _sessions.where((s) => s.status == 'active').length;
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Monitor Sessions  (${_sessions.length})'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _header(),
+            Expanded(
+              child: _error != null && _data == null
+                  ? _ErrorView(onRetry: _load)
+                  : RefreshIndicator(
+                      color: MedsColors.purple,
+                      onRefresh: _load,
+                      child: CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        slivers: [
+                          SliverToBoxAdapter(child: _stats()),
+                          SliverToBoxAdapter(child: _tabs()),
+                          SliverToBoxAdapter(child: _searchBar()),
+                          if (_loading && _data == null)
+                            const SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(
+                                  child: CircularProgressIndicator(
+                                      color: MedsColors.purple)),
+                            )
+                          else
+                            ..._listSlivers(),
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: _back,
+            tooltip: 'Back',
+          ),
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Monitor Sessions',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          height: 1.1,
+                          color: MedsColors.lightText)),
+                  SizedBox(height: 2),
+                  Text('Track all user monitoring sessions',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: MedsColors.muted, fontSize: 12.5)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          AdminHeaderButton(
+            icon: Icons.search,
+            tooltip: 'Search',
+            onTap: () => _searchFocus.requestFocus(),
+          ),
+          const SizedBox(width: 8),
+          AdminHeaderButton(
+            icon: Icons.filter_list,
+            tooltip: 'Filter',
+            onTap: _openFilter,
+          ),
         ],
       ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF00DC64)))
-          : Column(
-              children: [
-                if (active > 0)
-                  Container(
-                    width: double.infinity,
-                    color: const Color(0xFF00DC64).withValues(alpha: 0.12),
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    child: Text('$active session(s) active right now',
-                        style: const TextStyle(
-                            color: Color(0xFF00A84B),
-                            fontWeight: FontWeight.w600)),
-                  ),
-                Expanded(
-                  child: _sessions.isEmpty
-                      ? const Center(
-                          child: Text('No sessions yet',
-                              style: TextStyle(color: Colors.grey)))
-                      : RefreshIndicator(
-                          onRefresh: _load,
-                          child: ListView.separated(
-                            itemCount: _sessions.length,
-                            separatorBuilder: (_, __) => Divider(
-                                height: 1,
-                                color: Theme.of(context).dividerColor),
-                            itemBuilder: (context, i) {
-                              final s = _sessions[i];
-                              final color = _statusColor(s.status);
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor:
-                                      color.withValues(alpha: 0.15),
-                                  child: Icon(Icons.person, color: color),
-                                ),
-                                title: Text(_label(s.userId),
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600)),
-                                subtitle: Text(
-                                  '${DateFormat('dd MMM • HH:mm').format(s.startTime.toLocal())}  ·  ${_duration(s)}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                trailing: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(s.status.toUpperCase(),
-                                      style: TextStyle(
-                                          color: color,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10)),
-                                ),
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        SessionDetailScreen(session: s),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                ),
-              ],
-            ),
+    );
+  }
+
+  Widget _stats() {
+    final d = _data ?? MonitorSessionsData.empty;
+    const comparison = 'vs last 7d';
+    final cards = <Widget>[
+      _StatBox(
+        child: DashboardMetricCard(
+          label: 'Total Sessions',
+          value: '${d.total}',
+          icon: Icons.show_chart,
+          color: MedsColors.purple,
+          footer: MetricTrendPill(
+              percent: d.totalDeltaPct, hasBaseline: true, comparison: comparison),
+        ),
+      ),
+      _StatBox(
+        child: DashboardMetricCard(
+          label: 'Live Sessions',
+          value: '${d.live}',
+          icon: Icons.sensors,
+          color: MedsColors.greenDark,
+          footer: MetricTrendPill(
+              percent: d.liveDeltaPct, hasBaseline: true, comparison: comparison),
+        ),
+      ),
+      _StatBox(
+        child: DashboardMetricCard(
+          label: 'Completed',
+          value: '${d.completed}',
+          icon: Icons.check_circle_outline,
+          color: MedsColors.blue,
+          footer: MetricTrendPill(
+              percent: d.completedDeltaPct,
+              hasBaseline: true,
+              comparison: comparison),
+        ),
+      ),
+      _StatBox(
+        child: DashboardMetricCard(
+          label: 'Flagged',
+          value: '${d.flagged}',
+          icon: Icons.flag_outlined,
+          color: MedsColors.amber,
+          footer: MetricNewPill(count: d.flaggedDelta, comparison: comparison),
+        ),
+      ),
+    ];
+    return SizedBox(
+      height: 150,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        itemCount: cards.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, i) => cards[i],
+      ),
+    );
+  }
+
+  Widget _tabs() {
+    final d = _data ?? MonitorSessionsData.empty;
+    int countFor(_SessionTab t) => switch (t) {
+          _SessionTab.all => d.total,
+          _SessionTab.live => d.live,
+          _SessionTab.completed => d.completed,
+          _SessionTab.flagged => d.flagged,
+        };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: SizedBox(
+        height: 38,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _SessionTab.values.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) {
+            final t = _SessionTab.values[i];
+            return AdminTabChip(
+              label: '${t.title} (${countFor(t)})',
+              selected: _tab == t,
+              onTap: () => setState(() => _tab = t),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _searchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocus,
+        decoration: const InputDecoration(
+          hintText: 'Search by user name, email or session ID',
+          prefixIcon: Icon(Icons.search),
+        ),
+        onChanged: (v) => setState(() => _query = v),
+      ),
+    );
+  }
+
+  List<Widget> _listSlivers() {
+    final filtered = _filtered;
+    if (filtered.isEmpty) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: EmptyState(
+            icon: Icons.event_busy_outlined,
+            color: MedsColors.blue,
+            title: (_data?.sessions.isEmpty ?? true)
+                ? 'No sessions yet'
+                : 'No matching sessions',
+            message: (_data?.sessions.isEmpty ?? true)
+                ? 'Detection sessions across users will show here.'
+                : 'No sessions match this filter or search.',
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        sliver: SliverList.builder(
+          itemCount: filtered.length,
+          itemBuilder: (context, i) =>
+              MonitorSessionCard(item: filtered[i], onOpen: () => _open(filtered[i])),
+        ),
+      ),
+    ];
+  }
+}
+
+/// Fixed-width wrapper so the metric cards scroll horizontally without
+/// overflowing on narrow phones.
+class _StatBox extends StatelessWidget {
+  final Widget child;
+  const _StatBox({required this.child});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(width: 156, child: child);
+}
+
+class _ErrorView extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ErrorView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: EmptyState(
+        icon: Icons.cloud_off_outlined,
+        color: MedsColors.red,
+        title: 'Failed to load sessions',
+        message: 'Something went wrong while loading sessions.',
+        action: FilledButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Try Again'),
+        ),
+      ),
     );
   }
 }

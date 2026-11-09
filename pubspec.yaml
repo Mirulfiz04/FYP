@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   camera: ^0.12.0+1
   tflite_flutter: ^0.12.1
+  # On-device face detection: crop to the face before emotion classification.
+  google_mlkit_face_detection: ^0.13.1
   http: ^1.2.2
   image: ^4.2.0
   intl: ^0.19.0
@@ -18,9 +20,26 @@ dependencies:
   fl_chart: ^0.69.0
   image_picker: ^1.1.2
   shared_preferences: ^2.2.3
+  flutter_local_notifications: ^18.0.1
+  # Bluetooth-LE transport for the ESP32 sensor (alternative to Wi-Fi SoftAP).
+  flutter_blue_plus: ^1.32.0
+  permission_handler: ^11.3.1
+  record: ^6.1.2 # mic for the voice check-in (7.x needs Flutter 3.44+)
+  # Generates the PDF report for the "email my data" export.
+  pdf: ^3.11.1
+  # "Share as file" fallback — opens the OS share sheet with the export files.
+  share_plus: ^10.0.0
+  path_provider: ^2.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true
   assets:
     - assets/model.tflite
     - assets/labels.txt
+    - assets/voice_model.tflite
+    - assets/voice_labels.txt
+    - assets/images/

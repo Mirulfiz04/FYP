@@ -37,6 +37,15 @@ create policy "sessions_admin_select"
   on public.detection_sessions for select
   using (public.is_admin());
 
+-- Admins can update any detection session. Lets the admin "Monitor Sessions"
+-- screen self-heal sessions left "active" because their owner closed the app
+-- without ending them (otherwise users only heal their own rows on next login).
+drop policy if exists "sessions_admin_update" on public.detection_sessions;
+create policy "sessions_admin_update"
+  on public.detection_sessions for update
+  using (public.is_admin())
+  with check (public.is_admin());
+
 -- ============================================================
 --  MAKE YOURSELF AN ADMIN
 --  Run this once with your own account's email, then log in again:
