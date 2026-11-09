@@ -388,17 +388,15 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           color: MedsColors.amber,
           title: 'Integrations',
           subtitle: 'Manage AI API and external service integrations',
-          onTap: () => _adminOnly(AdminInfoScreen(
+          onTap: () => _adminOnly(const AdminInfoScreen(
             title: 'Integrations',
             subtitle: 'AI and external service connections.',
             icon: Icons.extension_outlined,
             color: MedsColors.amber,
             bullets: [
-              'AI provider: Google Gemini',
-              'Model: ${AiConfig.model}',
-              AiConfig.hasKey
-                  ? 'Status: Connected (API key configured)'
-                  : 'Status: Not configured — add an API key in ai_config.dart',
+              'AI provider: Anthropic Claude',
+              'Connection: Supabase Edge Function "${AiConfig.functionName}"',
+              'API key: Supabase secret ANTHROPIC_API_KEY (never in the app)',
               'Supabase: authentication, database and storage',
             ],
           )),

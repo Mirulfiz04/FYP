@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/ai_admin_report.dart';
 import '../models/ai_insight.dart';
@@ -8,16 +8,26 @@ import '../models/ai_trend_report.dart';
 import '../models/emotion_reading.dart';
 import 'ai_config.dart';
 
-/// Talks to the Google Gemini (Generative Language) API to turn MEDS data into
-/// AI analyses:
+/// Calls a Supabase Edge Function; matches `functions.invoke`.
+typedef AiInvoke = Future<FunctionResponse> Function(
+  String functionName, {
+  Object? body,
+});
+
+/// Turns MEDS data into AI analyses with Claude:
 ///   • [generateInsight]        — per-user / per-session wellness insight
 ///   • [generateTrendAnalysis]  — weekly / monthly emotional-trend report (admin)
 ///   • [generateAdminReport]    — one-click platform-wide report (admin)
 ///
-/// This calls the REST API directly with the `http` package. Structured output
-/// (`generationConfig.responseSchema` + `responseMimeType: application/json`)
-/// guarantees the model replies with JSON that matches the target model.
+/// Requests go through the `ai-proxy` Supabase Edge Function, which holds the
+/// Claude API key server-side. Each request carries a JSON schema, and Claude's
+/// structured output guarantees the reply is JSON matching the target model.
 class AiService {
+  /// [invoke] replaces the Supabase call in tests.
+  AiService({AiInvoke? invoke}) : _invoke = invoke;
+
+  final AiInvoke? _invoke;
+
   // ---- Public API ---------------------------------------------------------
 
   /// Per-user / per-session insight: summary, stress level, trend, tips.
@@ -104,88 +114,42 @@ class AiService {
           'overall emotional climate, user engagement, key findings, concerns '
           'to watch, and prioritized, practical recommendations.',
       schema: _reportSchema,
-      maxOutputTokens: 3072,
     );
     return AiAdminReport.fromJson(map);
   }
 
-  // ---- Shared Gemini call -------------------------------------------------
+  // ---- Shared Edge Function call ------------------------------------------
 
-  /// Posts a single structured-output request to Gemini and returns the parsed
-  /// JSON object. Shared by every public method above.
+  /// Sends one structured-output request to the `ai-proxy` Edge Function and
+  /// returns the parsed JSON object. Shared by every public method above.
   Future<Map<String, dynamic>> _request({
     required String systemPrompt,
     required String userPrompt,
     required Map<String, dynamic> schema,
-    int maxOutputTokens = 2048,
   }) async {
-    if (!AiConfig.hasKey) {
-      throw const AiException(
-        'No AI API key set. Add your Google Gemini API key in '
-        'lib/services/ai_config.dart (see the instructions at the top of that '
-        'file).',
-      );
-    }
-
-    final body = {
-      'system_instruction': {
-        'parts': [
-          {'text': systemPrompt}
-        ],
-      },
-      'contents': [
-        {
-          'role': 'user',
-          'parts': [
-            {'text': userPrompt}
-          ],
-        }
-      ],
-      'generationConfig': {
-        'maxOutputTokens': maxOutputTokens,
-        // gemini-2.5-flash "thinks" by default and thinking tokens count
-        // against maxOutputTokens. These tasks are simple, so turn thinking off
-        // for speed/cost and to keep the full budget for the JSON answer.
-        // NOTE: if you switch model to 'gemini-2.5-pro', thinking can't be
-        // fully disabled — remove this thinkingConfig or use a budget >= 128.
-        'thinkingConfig': {'thinkingBudget': 0},
-        'responseMimeType': 'application/json',
-        'responseSchema': schema,
-      },
-    };
-
-    http.Response res;
+    final FunctionResponse res;
     try {
-      res = await http
-          .post(
-            Uri.parse(
-              '${AiConfig.endpoint}/${AiConfig.model}:generateContent',
-            ),
-            headers: {
-              'content-type': 'application/json',
-              'x-goog-api-key': AiConfig.apiKey,
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 60));
+      final AiInvoke invoke =
+          _invoke ?? Supabase.instance.client.functions.invoke;
+      res = await invoke(AiConfig.functionName, body: {
+        'system': systemPrompt,
+        'prompt': userPrompt,
+        'schema': schema,
+      }).timeout(const Duration(seconds: 90));
+    } on FunctionException catch (e) {
+      // Non-2xx: the function sends {error: "..."} that is safe to show.
+      final details = e.details;
+      final msg = details is Map ? details['error'] : null;
+      throw AiException(
+          msg is String && msg.trim().isNotEmpty ? msg : _errorFor(e.status));
     } catch (_) {
       throw const AiException(
         'Could not reach the AI service. Check your internet connection.',
       );
     }
 
-    if (res.statusCode != 200) {
-      throw AiException(_errorFor(res.statusCode));
-    }
-
     try {
-      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-      final candidates = decoded['candidates'] as List;
-      final parts = (candidates.first as Map<String, dynamic>)['content']['parts']
-          as List;
-      final text = parts
-          .whereType<Map<String, dynamic>>()
-          .firstWhere((p) => p['text'] != null)['text'] as String;
+      final text = (res.data as Map)['text'] as String;
       return jsonDecode(text) as Map<String, dynamic>;
     } catch (_) {
       throw const AiException(
@@ -196,16 +160,16 @@ class AiService {
 
   String _errorFor(int code) {
     switch (code) {
-      case 400:
-        return 'Invalid AI request or API key. Check the Gemini key in '
-            'lib/services/ai_config.dart.';
-      case 403:
-        return 'This API key is not allowed to use the model (check the key '
-            'restrictions or that the Generative Language API is enabled).';
+      case 401:
+        return 'You are not signed in. Sign in again and retry.';
+      case 404:
+        return 'The AI service is not deployed yet (Edge Function '
+            '"${AiConfig.functionName}").';
       case 429:
         return 'AI rate limit / quota reached. Please wait a moment and try '
             'again.';
       case 500:
+      case 502:
       case 503:
         return 'The AI service is busy right now. Try again shortly.';
       default:
@@ -213,21 +177,23 @@ class AiService {
     }
   }
 
-  // ---- Response schemas ---------------------------------------------------
+  // ---- Response schemas (JSON Schema for Claude structured output) --------
+
+  static const _strings = {
+    'type': 'array',
+    'items': {'type': 'string'},
+  };
 
   static final Map<String, dynamic> _insightSchema = {
-    'type': 'OBJECT',
+    'type': 'object',
     'properties': {
-      'emotionalSummary': {'type': 'STRING'},
+      'emotionalSummary': {'type': 'string'},
       'stressLevel': {
-        'type': 'STRING',
+        'type': 'string',
         'enum': ['Low', 'Moderate', 'Elevated', 'High'],
       },
-      'trendAnalysis': {'type': 'STRING'},
-      'recommendations': {
-        'type': 'ARRAY',
-        'items': {'type': 'STRING'},
-      },
+      'trendAnalysis': {'type': 'string'},
+      'recommendations': _strings,
     },
     'required': [
       'emotionalSummary',
@@ -235,31 +201,17 @@ class AiService {
       'trendAnalysis',
       'recommendations',
     ],
-    'propertyOrdering': [
-      'emotionalSummary',
-      'stressLevel',
-      'trendAnalysis',
-      'recommendations',
-    ],
+    'additionalProperties': false,
   };
 
   static final Map<String, dynamic> _trendSchema = {
-    'type': 'OBJECT',
+    'type': 'object',
     'properties': {
-      'headline': {'type': 'STRING'},
-      'analysis': {'type': 'STRING'},
-      'positives': {
-        'type': 'ARRAY',
-        'items': {'type': 'STRING'},
-      },
-      'concerns': {
-        'type': 'ARRAY',
-        'items': {'type': 'STRING'},
-      },
-      'recommendations': {
-        'type': 'ARRAY',
-        'items': {'type': 'STRING'},
-      },
+      'headline': {'type': 'string'},
+      'analysis': {'type': 'string'},
+      'positives': _strings,
+      'concerns': _strings,
+      'recommendations': _strings,
     },
     'required': [
       'headline',
@@ -268,33 +220,18 @@ class AiService {
       'concerns',
       'recommendations',
     ],
-    'propertyOrdering': [
-      'headline',
-      'analysis',
-      'positives',
-      'concerns',
-      'recommendations',
-    ],
+    'additionalProperties': false,
   };
 
   static final Map<String, dynamic> _reportSchema = {
-    'type': 'OBJECT',
+    'type': 'object',
     'properties': {
-      'executiveSummary': {'type': 'STRING'},
-      'emotionalClimate': {'type': 'STRING'},
-      'engagement': {'type': 'STRING'},
-      'keyFindings': {
-        'type': 'ARRAY',
-        'items': {'type': 'STRING'},
-      },
-      'concerns': {
-        'type': 'ARRAY',
-        'items': {'type': 'STRING'},
-      },
-      'recommendations': {
-        'type': 'ARRAY',
-        'items': {'type': 'STRING'},
-      },
+      'executiveSummary': {'type': 'string'},
+      'emotionalClimate': {'type': 'string'},
+      'engagement': {'type': 'string'},
+      'keyFindings': _strings,
+      'concerns': _strings,
+      'recommendations': _strings,
     },
     'required': [
       'executiveSummary',
@@ -304,14 +241,7 @@ class AiService {
       'concerns',
       'recommendations',
     ],
-    'propertyOrdering': [
-      'executiveSummary',
-      'emotionalClimate',
-      'engagement',
-      'keyFindings',
-      'concerns',
-      'recommendations',
-    ],
+    'additionalProperties': false,
   };
 
   /// Builds a compact, token-efficient text summary of the readings. We send

@@ -1,7 +1,6 @@
 import 'package:camera/camera.dart';
 
 import '../models/session_readiness.dart';
-import 'ai_config.dart';
 import 'sensor_filter.dart';
 import 'sensor_service.dart';
 import 'supabase_service.dart';
@@ -94,7 +93,8 @@ class RealDeviceCheckService implements DeviceCheckService {
     return (
       storage: storage,
       internet: internet,
-      ai: AiConfig.hasKey ? AiStatus.available : AiStatus.offline,
+      // AI runs through the Supabase Edge Function, so it needs Supabase.
+      ai: internet == NetStatus.online ? AiStatus.available : AiStatus.offline,
     );
   }
 }

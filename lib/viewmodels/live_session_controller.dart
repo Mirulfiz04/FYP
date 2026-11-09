@@ -9,7 +9,6 @@ import '../models/multimodal_result.dart';
 import '../models/sensor_reading.dart';
 import '../models/session_aggregates.dart';
 import '../models/session_summary.dart';
-import '../services/ai_config.dart';
 import '../services/body_cues.dart';
 import '../services/emotion_classifier.dart';
 import '../services/emotion_fusion.dart';
@@ -145,7 +144,7 @@ class LiveSessionController extends ChangeNotifier {
       await _initCamera();
       if (_disposed) return;
       alerts.setCameraReady();
-      alerts.setAiAvailable(AiConfig.hasKey);
+      alerts.setAiAvailable(true); // key lives server-side in ai-proxy
       alerts.cameraOnlyMode = !useSensor;
       loading = false;
       _recomputeInsight();

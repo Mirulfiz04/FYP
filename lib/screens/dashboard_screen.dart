@@ -8,7 +8,6 @@ import '../models/detection_session.dart';
 import '../models/emotion_result.dart';
 import '../models/multimodal_result.dart';
 import '../models/sensor_reading.dart';
-import '../services/ai_config.dart';
 import '../services/ai_summary_service.dart';
 import '../services/emotion_classifier.dart';
 import '../services/emotion_fusion.dart';
@@ -130,7 +129,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
 
       _alerts.setCameraReady();
-      _alerts.setAiAvailable(AiConfig.hasKey);
+      _alerts.setAiAvailable(true); // key lives server-side in ai-proxy
 
       // Show the live camera preview straight away. We must NOT block on the
       // first (heavy) classification here: on slower devices that capture +
