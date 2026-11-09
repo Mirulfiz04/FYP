@@ -1,0 +1,8 @@
+# Install with Python 3.11 (NOT 3.14 — TensorFlow has no 3.14 build yet).
+tensorflow==2.15.0
+numpy<2.0
+opencv-python
+pillow
+matplotlib     # confusion matrix + training-history + ROC charts
+mediapipe      # best-quality face detection + eye-alignment in add_my_face.py
+scipy          # wav reading + resampling in train_voice.py

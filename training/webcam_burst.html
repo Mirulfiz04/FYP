@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MEDS Face Burst Capture</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; max-width: 760px; margin-inline: auto; }
+  h1 { font-size: 1.3rem; }
+  video { width: 100%; border-radius: 12px; background: #000; transform: scaleX(-1); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
+  select, button { font-size: 1rem; padding: 10px 14px; border-radius: 10px; border: 1px solid #8888; }
+  button { cursor: pointer; }
+  #shoot { background: #4f46e5; color: #fff; border: none; font-weight: 600; padding: 16px 22px; }
+  #shoot:active { background: #3730a3; }
+  #dl { background: #059669; color: #fff; border: none; }
+  #reset { background: transparent; }
+  .count { font-size: 1.1rem; font-weight: 700; }
+  .hint { color: #888; font-size: .9rem; line-height: 1.5; }
+  #thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; max-height: 220px; overflow: auto; }
+  #thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; }
+  .tag { display:inline-block; padding:2px 8px; border-radius: 999px; background:#4f46e522; font-size:.8rem; }
+</style>
+</head>
+<body>
+  <h1>📸 MEDS Face Burst Capture</h1>
+  <p class="hint">
+    1) Pick an emotion. 2) Make that face. 3) <b>Hold "Capture"</b> and slowly move your
+    head a little (turn left/right, tilt, closer/farther) so you get varied shots.
+    Aim for <b>~150–250 images per emotion</b>. 4) Click <b>Download</b> — the files save
+    named like <code>happy_....jpg</code>. Everything runs locally in your browser.
+  </p>
+
+  <video id="cam" autoplay playsinline muted></video>
+
+  <div class="row">
+    <label>Emotion:
+      <select id="emotion">
+        <option value="happy">happy</option>
+        <option value="neutral">neutral</option>
+        <option value="sad">sad</option>
+        <option value="surprise">surprise</option>
+        <option value="angry">angry</option>
+        <option value="fear">fear</option>
+        <option value="disgust">disgust</option>
+      </select>
+    </label>
+    <button id="shoot">● Hold to Capture</button>
+    <span class="count"><span id="n">0</span> shots</span>
+  </div>
+
+  <div class="row">
+    <button id="dl">⬇ Download all</button>
+    <button id="reset">Clear</button>
+    <span class="hint">Chrome may ask to "allow multiple downloads" — click Allow.</span>
+  </div>
+
+  <div id="thumbs"></div>
+
+<script>
+const video = document.getElementById('cam');
+const emotionSel = document.getElementById('emotion');
+const shootBtn = document.getElementById('shoot');
+const nEl = document.getElementById('n');
+const thumbs = document.getElementById('thumbs');
+let shots = [];            // {emotion, blob, url}
+let timer = null;
+const INTERVAL_MS = 120;   // capture ~8 frames/sec while holding
+const OUT = 640;           // saved image size (square). Plenty for face crop later.
+
+async function start() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 1280, height: 720, facingMode: 'user' }, audio: false
+    });
+    video.srcObject = stream;
+  } catch (e) {
+    alert('Could not open the camera: ' + e.message + '\nUse Chrome/Edge and allow camera access.');
+  }
+}
+
+function capture() {
+  if (!video.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = OUT; c.height = OUT;
+  const ctx = c.getContext('2d');
+  // Center-square crop of the live frame, un-mirrored so faces look natural.
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const side = Math.min(vw, vh);
+  const sx = (vw - side) / 2, sy = (vh - side) / 2;
+  ctx.drawImage(video, sx, sy, side, side, 0, 0, OUT, OUT);
+  c.toBlob(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    shots.push({ emotion: emotionSel.value, blob, url });
+    nEl.textContent = shots.length;
+    const img = document.createElement('img');
+    img.src = url;
+    thumbs.prepend(img);
+    while (thumbs.children.length > 60) thumbs.removeChild(thumbs.lastChild);
+  }, 'image/jpeg', 0.92);
+}
+
+function startShoot(e) { e.preventDefault(); if (timer) return; capture(); timer = setInterval(capture, INTERVAL_MS); }
+function stopShoot() { if (timer) { clearInterval(timer); timer = null; } }
+
+shootBtn.addEventListener('mousedown', startShoot);
+shootBtn.addEventListener('touchstart', startShoot, { passive:false });
+window.addEventListener('mouseup', stopShoot);
+window.addEventListener('touchend', stopShoot);
+
+document.getElementById('dl').addEventListener('click', async () => {
+  if (!shots.length) { alert('No shots yet — hold Capture first.'); return; }
+  // Save each shot as its own file, named <emotion>_<index>.jpg, spaced out so
+  // the browser doesn't drop downloads.
+  const pad = n => String(n).padStart(4, '0');
+  const counters = {};
+  for (const s of shots) {
+    counters[s.emotion] = (counters[s.emotion] || 0) + 1;
+    const a = document.createElement('a');
+    a.href = s.url;
+    a.download = `${s.emotion}_${pad(counters[s.emotion])}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    await new Promise(r => setTimeout(r, 120));
+  }
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  shots.forEach(s => URL.revokeObjectURL(s.url));
+  shots = []; nEl.textContent = 0; thumbs.innerHTML = '';
+});
+
+start();
+</script>
+</body>
+</html>
