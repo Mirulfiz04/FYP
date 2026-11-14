@@ -33,7 +33,9 @@ class AppCard extends StatelessWidget {
         width: double.infinity,
         padding: padding,
         decoration: decoration,
-        child: child,
+        // Own Material: ListTiles inside paint their ink above the card colour
+        // (newer Flutter asserts when a coloured DecoratedBox hides it).
+        child: Material(type: MaterialType.transparency, child: child),
       );
     }
 
