@@ -29,6 +29,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.38.3' # pinned to the version the app is built with; bump on purpose
           cache: true
       - run: flutter pub get
       # Only real errors fail the build; lint hints are listed but don't block.
@@ -77,6 +78,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.38.3' # pinned to the version the app is built with; bump on purpose
           cache: true
       # shortcut: signed with the debug key (android/app/build.gradle.kts), fine for demos; add a release keystore secret before a Play Store upload.
       - run: flutter build apk --release
