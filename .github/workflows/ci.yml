@@ -5,6 +5,7 @@
 #   2. python          -> the training-script self-checks in training/test_*.py
 #   3. edge-functions  -> type-checks the Supabase Edge Functions
 #   The three run in parallel. If any fails, the PR shows a red X.
+#   ios-build -> (experimental) compiles the iOS app on a macOS runner; never fails the run.
 #
 # CD (Continuous Delivery) - only after a push to main, and only if CI is green:
 #   4. android-apk     -> builds the release APK, downloadable from the run page
@@ -62,6 +63,25 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check supabase/functions/*/index.ts
+
+  # Experimental: a compile check on a macOS runner (free on public repos). A red
+  # X here does NOT fail the run; delete `continue-on-error` once it is green.
+  ios-build:
+    name: Build iOS (compile check, no signing)
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.3' # pinned to the version the app is built with; bump on purpose
+          cache: true
+      # shortcut: the repo has no ios/ folder, so one is generated here only to prove the Dart code and plugins compile (no camera/mic permission strings, no signing); commit a real ios/ folder before shipping to an iPhone.
+      - run: flutter create --platforms=ios --project-name meds_flutter_no_python .
+      # google_mlkit_face_detection needs iOS 15.5+.
+      - run: sed -i '' "s/^# platform :ios, .*/platform :ios, '15.5'/" ios/Podfile
+      - run: flutter build ios --release --no-codesign
 
   # ---------------------------------------------------------------- CD
   android-apk:
