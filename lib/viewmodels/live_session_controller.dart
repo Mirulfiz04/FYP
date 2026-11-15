@@ -86,6 +86,7 @@ class LiveSessionController extends ChangeNotifier {
   static const Duration _voiceInsightHold = Duration(seconds: 60);
   bool _voiceReady = false;
   bool listening = false; // the mic is recording the answer
+  double voiceLevel = 0; // live microphone level (0..1) while listening
   EmotionResult? lastVoice;
   DateTime? _lastVoiceAt;
 
@@ -297,7 +298,10 @@ class LiveSessionController extends ChangeNotifier {
     listening = true;
     notifyListeners();
     try {
-      final audio = await _voice.record();
+      final audio = await _voice.record(onLevel: (level) {
+        voiceLevel = level;
+        if (!_disposed) notifyListeners();
+      });
       if (audio == null || _disposed) return null;
       final result = _voice.classify(audio);
       if (result.probabilities.isEmpty) return null;
@@ -308,6 +312,7 @@ class LiveSessionController extends ChangeNotifier {
       return null;
     } finally {
       listening = false;
+      voiceLevel = 0;
       if (!_disposed) notifyListeners();
     }
   }

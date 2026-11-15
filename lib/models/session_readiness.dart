@@ -45,6 +45,7 @@ const List<({String key, String label})> kPrepItems = [
   (key: 'finger', label: 'My finger is placed correctly on the sensor.'),
   (key: 'still', label: 'I have remained still for the baseline measurement.'),
   (key: 'voice', label: 'I am in a quiet place and can answer out loud.'),
+  (key: 'mic', label: 'I allow MEDS to use my microphone during this session.'),
   (
     key: 'disclaimer',
     label: 'I understand that this system is for wellness monitoring and is '
@@ -93,6 +94,9 @@ class SessionReadiness {
 
   /// Result of the optional "say something" microphone test (never blocks).
   VoiceTest voiceTest;
+
+  /// Live microphone level (0..1) while the voice test is listening.
+  double voiceLevel = 0;
 
   Set<String> prepConfirmed;
 
@@ -199,7 +203,7 @@ class SessionReadiness {
   List<({String key, String label})> get requiredPrepItems => kPrepItems
       .where((i) =>
           (useSensor || (i.key != 'finger' && i.key != 'still')) &&
-          (useVoice || i.key != 'voice'))
+          (useVoice || (i.key != 'voice' && i.key != 'mic')))
       .toList();
 
   bool get preparationConfirmed =>

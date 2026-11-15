@@ -132,9 +132,14 @@ class SessionReadinessController extends ChangeNotifier {
     _notify();
     var heard = false;
     try {
-      heard = await deviceService.testVoice();
+      heard = await deviceService.testVoice(onLevel: (level) {
+        state.voiceLevel = level;
+        _notify();
+      });
     } catch (_) {/* recorder failed: treated as not heard */}
-    state.voiceTest = heard ? VoiceTest.heard : VoiceTest.tooQuiet;
+    state
+      ..voiceLevel = 0
+      ..voiceTest = heard ? VoiceTest.heard : VoiceTest.tooQuiet;
     _notify();
   }
 

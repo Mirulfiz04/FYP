@@ -40,7 +40,8 @@ abstract class DeviceCheckService {
 
   /// Records a short answer; true when something loud enough to be speech
   /// was heard.
-  Future<bool> testVoice();
+  /// [onLevel] reports the live microphone level (0..1) while recording.
+  Future<bool> testVoice({void Function(double level)? onLevel});
 }
 
 /// Real checks using the existing services. Note: true camera-permission and
@@ -122,10 +123,10 @@ class RealDeviceCheckService implements DeviceCheckService {
   }
 
   @override
-  Future<bool> testVoice() async {
+  Future<bool> testVoice({void Function(double level)? onLevel}) async {
     final voice = VoiceClassifier();
     try {
-      final audio = await voice.record();
+      final audio = await voice.record(onLevel: onLevel);
       return audio != null &&
           VoiceClassifier.trimSilence(audio,
                   minRms: VoiceClassifier.minSpeechRms)
@@ -195,7 +196,10 @@ class MockDeviceCheckService implements DeviceCheckService {
   Future<VoiceSnapshot> checkVoice() async => voice;
 
   @override
-  Future<bool> testVoice() async => voiceHeard;
+  Future<bool> testVoice({void Function(double level)? onLevel}) async {
+    onLevel?.call(voiceHeard ? 0.6 : 0);
+    return voiceHeard;
+  }
 
   @override
   Future<CameraSnapshot> checkCamera() async {

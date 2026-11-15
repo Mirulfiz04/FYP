@@ -401,6 +401,39 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
               : 'Test Again',
           onAction: _c.testVoice,
         ),
+        _micLevelRow(s),
+      ],
+    );
+  }
+
+  /// Shows what the microphone hears during the voice test, so the user can
+  /// tell a dead microphone from speaking too softly.
+  Widget _micLevelRow(SessionReadiness s) {
+    final listening = s.voiceTest == VoiceTest.listening;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Microphone Level',
+            style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: s.voiceLevel,
+            minHeight: 10,
+            color: _accent,
+            backgroundColor: _accent.withValues(alpha: 0.14),
+            semanticsLabel: 'Microphone level',
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          listening
+              ? 'Listening: speak now. The bar should move when you talk.'
+              : 'Tap Test Microphone and speak. If the bar stays empty, the '
+                  'microphone is not picking you up.',
+          style: const TextStyle(fontSize: 12, color: MedsColors.muted),
+        ),
       ],
     );
   }

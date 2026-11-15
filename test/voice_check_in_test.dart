@@ -64,6 +64,25 @@ void main() {
         ..setInt16(4, 0, Endian.little);
       expect(VoiceClassifier.pcm16ToFloat(bytes), [1.0, -1.0, 0.0]);
     });
+
+    test('levelOf: silence is 0, louder audio fills more of the bar', () {
+      Uint8List tone(int amp) {
+        final b = Uint8List(200);
+        final d = ByteData.sublistView(b);
+        for (var i = 0; i < 100; i++) {
+          d.setInt16(i * 2, i.isEven ? amp : -amp, Endian.little);
+        }
+        return b;
+      }
+
+      expect(VoiceClassifier.levelOf(Uint8List(200)), 0);
+      expect(VoiceClassifier.levelOf(Uint8List(0)), 0);
+      final quiet = VoiceClassifier.levelOf(tone(300));
+      final loud = VoiceClassifier.levelOf(tone(6000));
+      expect(quiet, greaterThan(0));
+      expect(loud, greaterThan(quiet));
+      expect(VoiceClassifier.levelOf(tone(32767)), 1.0);
+    });
   });
 
   group('voice fusion', () {

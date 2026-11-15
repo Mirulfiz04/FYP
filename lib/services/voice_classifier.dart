@@ -50,7 +50,8 @@ class VoiceClassifier {
 
   /// Records [answerTime] of microphone audio as 16 kHz mono. Returns null if
   /// the microphone permission is denied.
-  Future<Float32List?> record() async {
+  /// [onLevel] gets the loudness (0..1) of each chunk, for a level meter.
+  Future<Float32List?> record({void Function(double level)? onLevel}) async {
     final recorder = _recorder ??= AudioRecorder();
     if (!await recorder.hasPermission()) return null;
     final bytes = BytesBuilder(copy: false);
@@ -59,7 +60,10 @@ class VoiceClassifier {
       sampleRate: sampleRate,
       numChannels: 1,
     ));
-    final sub = stream.listen(bytes.add);
+    final sub = stream.listen((chunk) {
+      bytes.add(chunk);
+      onLevel?.call(levelOf(chunk));
+    });
     await Future<void>.delayed(answerTime);
     await recorder.stop();
     await sub.cancel();
@@ -105,6 +109,18 @@ class VoiceClassifier {
       out[i] = data.getInt16(i * 2, Endian.little) / 32767.0;
     }
     return out;
+  }
+
+  /// Loudness of one PCM chunk as 0..1 for a level meter. Square-root scaled
+  /// so normal speech fills about half the bar instead of a sliver.
+  static double levelOf(Uint8List chunk) {
+    final x = pcm16ToFloat(chunk);
+    if (x.isEmpty) return 0;
+    var sum = 0.0;
+    for (final v in x) {
+      sum += v * v;
+    }
+    return math.min(1.0, 2 * math.sqrt(math.sqrt(sum / x.length)));
   }
 
   /// Cuts leading/trailing silence: keeps from the first to the last frame
