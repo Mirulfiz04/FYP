@@ -37,7 +37,11 @@ class DetectionSession {
   bool get isActive => status == 'active';
 
   /// Length of the session — live elapsed time if still active.
-  Duration get duration => (endTime ?? DateTime.now()).difference(startTime);
+  /// Never negative: some stored rows have an end time before their start.
+  Duration get duration {
+    final d = (endTime ?? DateTime.now()).difference(startTime);
+    return d.isNegative ? Duration.zero : d;
+  }
 
   factory DetectionSession.fromJson(Map<String, dynamic> json) {
     return DetectionSession(

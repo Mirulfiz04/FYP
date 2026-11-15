@@ -31,7 +31,9 @@ class NotificationBell extends StatelessWidget {
               Positioned(
                 right: 6,
                 top: 8,
-                child: Container(
+                // Let taps on the badge fall through to the bell underneath.
+                child: IgnorePointer(
+                    child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   constraints:
                       const BoxConstraints(minWidth: 18, minHeight: 18),
@@ -50,7 +52,7 @@ class NotificationBell extends StatelessWidget {
                       height: 1.2,
                     ),
                   ),
-                ),
+                )),
               ),
           ],
         );

@@ -144,10 +144,15 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
     // startSession() network call gives the emulator's camera the whole
     // round-trip to close, avoiding the "Broken pipe" overlap.
     await _c.releaseCamera();
+    _c.stopLiveSensorDetection(); // this screen now stays under the live session
     try {
       final session = await SupabaseService().startSession();
       if (!mounted) return;
-      await Navigator.of(context).pushReplacement(MaterialPageRoute(
+      final nav = Navigator.of(context);
+      final self = ModalRoute.of(context)!;
+      // push, not pushReplacement: replacing completed the opener's future with
+      // null straight away, so Home/History never reloaded after a session.
+      final ran = await nav.push<bool>(MaterialPageRoute(
         builder: (_) => LiveSessionScreen(
           cameras: widget.cameras,
           session: session,
@@ -156,6 +161,7 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
           useSensor: _c.state.useSensor,
         ),
       ));
+      if (self.isActive) nav.removeRoute(self, ran);
     } catch (e) {
       if (!mounted) return;
       setState(() => _starting = false);

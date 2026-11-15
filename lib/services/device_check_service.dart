@@ -1,4 +1,6 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../models/session_readiness.dart';
 import 'sensor_filter.dart';
@@ -42,8 +44,19 @@ class RealDeviceCheckService implements DeviceCheckService {
   @override
   Future<CameraSnapshot> checkCamera() async {
     final hasCamera = cameras.isNotEmpty;
+    var allowed = hasCamera;
+    // Ask for the real permission on phones (this shows the system prompt the
+    // first time). Other platforms keep the old "has a camera" inference.
+    if (hasCamera &&
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
+      try {
+        allowed = (await Permission.camera.request()).isGranted;
+      } catch (_) {/* plugin unavailable: keep the inference */}
+    }
     return (
-      permission: hasCamera ? CameraPermission.granted : CameraPermission.denied,
+      permission: allowed ? CameraPermission.granted : CameraPermission.denied,
       connection:
           hasCamera ? CameraConnection.connected : CameraConnection.unavailable,
       face: hasCamera ? FaceVisibility.detected : FaceVisibility.notVisible,

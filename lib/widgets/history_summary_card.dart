@@ -47,7 +47,7 @@ class HistorySummaryCard extends StatelessWidget {
               color: MedsColors.greenDark,
               label: 'Most Frequent',
               value: summary.topEmotion,
-              sub: summary.totalSessions > 0
+              sub: summary.topEmotionPercent > 0
                   ? '${summary.topEmotionPercent}% of time'
                   : '—',
               small: true,
