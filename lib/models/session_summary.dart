@@ -113,8 +113,9 @@ class SessionSummary {
     for (final r in readings) {
       counts[r.emotion] = (counts[r.emotion] ?? 0) + 1;
     }
+    // '—' (not 'Neutral') when nothing was recorded, as the admin screens do.
     final dominant = counts.isEmpty
-        ? 'Neutral'
+        ? '—'
         : counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
 
     final domReadings = readings.where((r) => r.emotion == dominant).toList();
@@ -139,7 +140,7 @@ class SessionSummary {
       averageBpm: avg,
       minimumBpm: min,
       maximumBpm: max,
-      finalState: deriveFinalState(dominant, avg),
+      finalState: counts.isEmpty ? '—' : deriveFinalState(dominant, avg),
       aiSummaryStatus:
           AiSummaryStatus.fromRaw(s.aiSummaryStatus, hasSummary: s.aiSummary != null),
       aiSummary: s.aiSummary,

@@ -150,15 +150,21 @@ class HistoryViewModel extends ChangeNotifier {
     final hr = list.where((s) => s.averageBpm > 0).map((s) => s.averageBpm);
     final avg = hr.isEmpty ? 0 : (hr.reduce((a, b) => a + b) / hr.length).round();
     final counts = <String, int>{};
+    var withReadings = 0;
     for (final s in list) {
+      if (s.dominantEmotion == '—') continue; // session recorded nothing
+      withReadings++;
       counts[s.dominantEmotion] = (counts[s.dominantEmotion] ?? 0) + 1;
     }
-    final top = counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
+    final top = counts.isEmpty
+        ? null
+        : counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
     return HistorySummary(
       totalSessions: list.length,
       averageBpm: avg,
-      topEmotion: top.key,
-      topEmotionPercent: (top.value * 100 / list.length).round(),
+      topEmotion: top?.key ?? '—',
+      topEmotionPercent:
+          top == null ? 0 : (top.value * 100 / withReadings).round(),
     );
   }
 

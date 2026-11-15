@@ -89,7 +89,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: _accent,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                // Bottom space so Log Out scrolls clear of the docked Live button.
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 56),
                 children: [
                   _topBar(),
                   const SizedBox(height: 12),

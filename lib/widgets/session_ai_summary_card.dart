@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/ai_insight.dart';
 import '../models/detection_session.dart';
 import '../services/ai_summary_service.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import 'ui_kit.dart';
 
@@ -25,6 +26,20 @@ class _SessionAiSummaryCardState extends State<SessionAiSummaryCard> {
   late String? _error = widget.session.aiSummaryError;
   bool _busy = false;
 
+  @override
+  void didUpdateWidget(SessionAiSummaryCard old) {
+    super.didUpdateWidget(old);
+    // The page re-reads the session while the insight is generated in the
+    // background; follow it, unless this card is running its own request.
+    if (!_busy &&
+        (old.session.aiSummaryStatus != widget.session.aiSummaryStatus ||
+            old.session.aiSummary != widget.session.aiSummary)) {
+      _status = widget.session.aiSummaryStatus;
+      _insight = widget.session.aiSummary;
+      _error = widget.session.aiSummaryError;
+    }
+  }
+
   Future<void> _generate() async {
     setState(() {
       _busy = true;
@@ -35,6 +50,13 @@ class _SessionAiSummaryCardState extends State<SessionAiSummaryCard> {
       widget.session.sessionId,
       userId: widget.session.userId,
     );
+    String? reason; // the stored failure reason, e.g. "No readings to analyze."
+    if (insight == null) {
+      try {
+        reason = (await SupabaseService().fetchSession(widget.session.sessionId))
+            .aiSummaryError;
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -43,7 +65,7 @@ class _SessionAiSummaryCardState extends State<SessionAiSummaryCard> {
         _status = 'completed';
       } else {
         _status = 'failed';
-        _error ??= 'AI insight could not be generated. Please try again.';
+        _error = reason;
       }
     });
   }
@@ -105,8 +127,11 @@ class _SessionAiSummaryCardState extends State<SessionAiSummaryCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _error?.isNotEmpty == true
-                ? 'AI insight could not be generated. Please try again.'
+            // Only the known reason is shown; other stored errors are raw
+            // exception text.
+            _error == 'No readings to analyze.'
+                ? 'This session has no readings, so there is nothing to '
+                    'analyse.'
                 : 'AI insight could not be generated. Please try again.',
             style: const TextStyle(color: MedsColors.red, fontSize: 13),
           ),
