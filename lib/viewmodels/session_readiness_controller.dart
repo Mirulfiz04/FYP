@@ -65,6 +65,7 @@ class SessionReadinessController extends ChangeNotifier {
     await Future.wait([
       _runCamera(),
       if (state.useSensor) _runSensor(),
+      if (state.useVoice) _runVoice(),
       _runSystem(),
     ]);
   }
@@ -99,6 +100,42 @@ class SessionReadinessController extends ChangeNotifier {
     state.useSensor = value;
     _notify();
     if (value) _runSensor();
+  }
+
+  /// Turns voice recognition on/off for the session. Checks the microphone
+  /// and the voice model when turning it on.
+  void setUseVoice(bool value) {
+    state.useVoice = value;
+    _notify();
+    if (value) _runVoice();
+  }
+
+  Future<void> retryVoice() => _runVoice();
+
+  Future<void> _runVoice() async {
+    state
+      ..micPermission = MicPermission.checking
+      ..voiceModel = VoiceModelStatus.checking;
+    _notify();
+    final v = await deviceService.checkVoice();
+    state
+      ..micPermission = v.mic
+      ..voiceModel = v.model;
+    _notify();
+  }
+
+  /// Optional microphone test: listens for a few seconds and reports whether
+  /// the user was heard. Never blocks starting.
+  Future<void> testVoice() async {
+    if (state.voiceTest == VoiceTest.listening) return;
+    state.voiceTest = VoiceTest.listening;
+    _notify();
+    var heard = false;
+    try {
+      heard = await deviceService.testVoice();
+    } catch (_) {/* recorder failed: treated as not heard */}
+    state.voiceTest = heard ? VoiceTest.heard : VoiceTest.tooQuiet;
+    _notify();
   }
 
   Future<void> retryCamera() => _runCamera();

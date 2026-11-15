@@ -262,4 +262,30 @@ void main() {
     // Sensor disconnected + no baseline, but ignored in camera-only mode.
     expect(c.canStart, isTrue);
   });
+
+  test('voice recognition: must be ready to start, mic test never blocks',
+      () async {
+    final c = ctrl(
+      device: MockDeviceCheckService(
+        voice: (mic: MicPermission.denied, model: VoiceModelStatus.ready),
+        voiceHeard: false,
+      ),
+    );
+    c.setUseSensor(false);
+    await c.runChecks();
+    for (final item in kPrepItems) {
+      c.togglePrep(item.key, true);
+    }
+    expect(c.canStart, isTrue); // voice off: the mic is not looked at
+
+    c.setUseVoice(true);
+    await c.retryVoice();
+    expect(c.state.requiredPrepItems.any((i) => i.key == 'voice'), isTrue);
+    expect(c.canStart, isFalse); // mic denied
+
+    c.state.micPermission = MicPermission.granted;
+    await c.testVoice();
+    expect(c.state.voiceTest, VoiceTest.tooQuiet);
+    expect(c.canStart, isTrue);
+  });
 }

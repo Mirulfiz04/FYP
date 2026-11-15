@@ -1,11 +1,13 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 
 import '../models/session_readiness.dart';
 import 'sensor_filter.dart';
 import 'sensor_service.dart';
 import 'supabase_service.dart';
+import 'voice_classifier.dart';
 
 typedef CameraSnapshot = ({
   CameraPermission permission,
@@ -18,6 +20,7 @@ typedef SensorSnapshot = ({
   SignalQuality signal,
   int? bpm,
 });
+typedef VoiceSnapshot = ({MicPermission mic, VoiceModelStatus model});
 typedef SystemSnapshot = ({
   StorageStatus storage,
   NetStatus internet,
@@ -31,6 +34,13 @@ abstract class DeviceCheckService {
   Future<CameraSnapshot> checkCamera();
   Future<SensorSnapshot> checkSensor();
   Future<SystemSnapshot> checkSystem();
+
+  /// Microphone permission + whether the voice model loads on this device.
+  Future<VoiceSnapshot> checkVoice();
+
+  /// Records a short answer; true when something loud enough to be speech
+  /// was heard.
+  Future<bool> testVoice();
 }
 
 /// Real checks using the existing services. Note: true camera-permission and
@@ -92,6 +102,40 @@ class RealDeviceCheckService implements DeviceCheckService {
   }
 
   @override
+  Future<VoiceSnapshot> checkVoice() async {
+    var mic = MicPermission.denied;
+    try {
+      // Same call the live check-in uses; shows the system prompt first time.
+      final recorder = AudioRecorder();
+      if (await recorder.hasPermission()) mic = MicPermission.granted;
+      await recorder.dispose();
+    } catch (_) {/* no recorder on this platform: stays denied */}
+    var model = VoiceModelStatus.missing;
+    final voice = VoiceClassifier();
+    try {
+      await voice.load();
+      if (voice.labels.isNotEmpty) model = VoiceModelStatus.ready;
+    } catch (_) {/* model not bundled / not loadable */} finally {
+      voice.close();
+    }
+    return (mic: mic, model: model);
+  }
+
+  @override
+  Future<bool> testVoice() async {
+    final voice = VoiceClassifier();
+    try {
+      final audio = await voice.record();
+      return audio != null &&
+          VoiceClassifier.trimSilence(audio,
+                  minRms: VoiceClassifier.minSpeechRms)
+              .isNotEmpty;
+    } finally {
+      voice.close();
+    }
+  }
+
+  @override
   Future<SystemSnapshot> checkSystem() async {
     StorageStatus storage;
     NetStatus internet;
@@ -118,6 +162,8 @@ class MockDeviceCheckService implements DeviceCheckService {
   final CameraSnapshot camera;
   final SensorSnapshot sensor;
   final SystemSnapshot system;
+  final VoiceSnapshot voice;
+  final bool voiceHeard;
   final Duration delay;
 
   MockDeviceCheckService({
@@ -137,8 +183,19 @@ class MockDeviceCheckService implements DeviceCheckService {
       internet: NetStatus.online,
       ai: AiStatus.available,
     ),
+    this.voice = const (
+      mic: MicPermission.granted,
+      model: VoiceModelStatus.ready,
+    ),
+    this.voiceHeard = true,
     this.delay = Duration.zero,
   });
+
+  @override
+  Future<VoiceSnapshot> checkVoice() async => voice;
+
+  @override
+  Future<bool> testVoice() async => voiceHeard;
 
   @override
   Future<CameraSnapshot> checkCamera() async {

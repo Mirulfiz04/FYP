@@ -35,6 +35,9 @@ class LiveSessionScreen extends StatefulWidget {
   final int? baselineBpm;
   final bool useSensor;
 
+  /// False when the user left voice recognition off on the readiness screen.
+  final bool useVoice;
+
   const LiveSessionScreen({
     super.key,
     required this.cameras,
@@ -42,6 +45,7 @@ class LiveSessionScreen extends StatefulWidget {
     required this.onOpenTab,
     this.baselineBpm,
     this.useSensor = true,
+    this.useVoice = true,
   });
 
   @override
@@ -342,16 +346,24 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
               width: 58,
               height: 58,
               child: FloatingActionButton(
-                onPressed: _c.voiceAvailable && _c.recording && !_c.listening
+                onPressed: widget.useVoice &&
+                        _c.voiceAvailable &&
+                        _c.recording &&
+                        !_c.listening
                     ? _voiceCheckIn
                     : null,
-                tooltip: 'Voice check-in: "Are you OK?"',
+                tooltip: widget.useVoice
+                    ? 'Voice check-in: "Are you OK?"'
+                    : 'Voice recognition is off for this session',
                 backgroundColor:
                     _c.listening ? MedsColors.red : medsNavAccent,
                 foregroundColor: Colors.white,
                 elevation: 3,
                 shape: const CircleBorder(),
-                child: Icon(_c.listening ? Icons.graphic_eq : Icons.mic,
+                child: Icon(
+                    _c.listening
+                        ? Icons.graphic_eq
+                        : (widget.useVoice ? Icons.mic : Icons.mic_off),
                     size: 26),
               ),
             ),
