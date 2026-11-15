@@ -14,6 +14,12 @@ enum FingerDetection { checking, detected, notDetected }
 
 enum SignalQuality { checking, poor, fair, good }
 
+enum MicPermission { checking, granted, denied }
+
+enum VoiceModelStatus { checking, ready, missing }
+
+enum VoiceTest { notTested, listening, heard, tooQuiet }
+
 enum BaselineStatus { notStarted, measuring, completed, failed }
 
 /// Whether the user looked calm (per the camera) while the baseline was taken.
@@ -38,6 +44,7 @@ const List<({String key, String label})> kPrepItems = [
   (key: 'face', label: 'My face is clearly visible.'),
   (key: 'finger', label: 'My finger is placed correctly on the sensor.'),
   (key: 'still', label: 'I have remained still for the baseline measurement.'),
+  (key: 'voice', label: 'I am in a quiet place and can answer out loud.'),
   (
     key: 'disclaimer',
     label: 'I understand that this system is for wellness monitoring and is '
@@ -78,10 +85,23 @@ class SessionReadiness {
   /// session): sensor + baseline checks are skipped and don't block starting.
   bool useSensor;
 
+  /// When true, the user wants the voice check-in in this session: the
+  /// microphone + voice model must be ready before starting.
+  bool useVoice;
+  MicPermission micPermission;
+  VoiceModelStatus voiceModel;
+
+  /// Result of the optional "say something" microphone test (never blocks).
+  VoiceTest voiceTest;
+
   Set<String> prepConfirmed;
 
   SessionReadiness({
     this.useSensor = true,
+    this.useVoice = false,
+    this.micPermission = MicPermission.checking,
+    this.voiceModel = VoiceModelStatus.checking,
+    this.voiceTest = VoiceTest.notTested,
     this.cameraPermission = CameraPermission.checking,
     this.cameraConnection = CameraConnection.checking,
     this.faceVisibility = FaceVisibility.checking,
@@ -176,11 +196,11 @@ class SessionReadiness {
 
   /// Checklist items required for the current mode (finger + baseline items are
   /// dropped in camera-only mode).
-  List<({String key, String label})> get requiredPrepItems => useSensor
-      ? kPrepItems
-      : kPrepItems
-          .where((i) => i.key != 'finger' && i.key != 'still')
-          .toList();
+  List<({String key, String label})> get requiredPrepItems => kPrepItems
+      .where((i) =>
+          (useSensor || (i.key != 'finger' && i.key != 'still')) &&
+          (useVoice || i.key != 'voice'))
+      .toList();
 
   bool get preparationConfirmed =>
       requiredPrepItems.every((i) => prepConfirmed.contains(i.key));
@@ -193,6 +213,11 @@ class SessionReadiness {
   /// since both are unavoidable on the emulator and common with a real sensor.
   bool get _sensorReady => sensorConnected && fingerDetected;
 
+  /// Voice checks, only relevant when [useVoice] is on.
+  bool get voiceReady =>
+      micPermission == MicPermission.granted &&
+      voiceModel == VoiceModelStatus.ready;
+
   /// True only when every mandatory check passes and the checklist is complete.
   /// Internet and AI availability are intentionally excluded; the heart-rate
   /// sensor + baseline are only required when [useSensor] is on.
@@ -201,6 +226,7 @@ class SessionReadiness {
       cameraConnected &&
       faceVisible &&
       (!useSensor || _sensorReady) &&
+      (!useVoice || voiceReady) &&
       storageReady &&
       preparationConfirmed;
 
@@ -218,6 +244,12 @@ class SessionReadiness {
             baselineStatus == BaselineStatus.measuring)) {
       return true;
     }
+    if (useVoice &&
+        (micPermission == MicPermission.checking ||
+            voiceModel == VoiceModelStatus.checking ||
+            voiceTest == VoiceTest.listening)) {
+      return true;
+    }
     return false;
   }
 
@@ -228,6 +260,7 @@ class SessionReadiness {
         cameraConnected &&
         faceVisible &&
         (!useSensor || _sensorReady) &&
+        (!useVoice || voiceReady) &&
         storageReady;
     return devicesReady ? OverallStatus.ready : OverallStatus.actionRequired;
   }
@@ -312,6 +345,43 @@ abstract final class ReadinessView {
             level: CheckLevel.warn,
             message: 'Signal is unstable — for a cleaner reading adjust your finger and stay still. '
                 'You can still start the session; this won\'t block you.'
+          ),
+      };
+
+  static CheckView micPermission(MicPermission s) => switch (s) {
+        MicPermission.checking => (text: 'Checking', level: CheckLevel.checking, message: null),
+        MicPermission.granted => (text: 'Granted', level: CheckLevel.ok, message: null),
+        MicPermission.denied => (
+            text: 'Permission Denied',
+            level: CheckLevel.error,
+            message: 'Microphone permission is required for voice recognition.'
+          ),
+      };
+
+  static CheckView voiceModel(VoiceModelStatus s) => switch (s) {
+        VoiceModelStatus.checking => (text: 'Checking', level: CheckLevel.checking, message: null),
+        VoiceModelStatus.ready => (text: 'Ready', level: CheckLevel.ok, message: null),
+        VoiceModelStatus.missing => (
+            text: 'Unavailable',
+            level: CheckLevel.error,
+            message: 'The voice model could not be loaded on this device. '
+                'Turn off voice recognition to continue.'
+          ),
+      };
+
+  static CheckView voiceTest(VoiceTest s) => switch (s) {
+        VoiceTest.notTested => (
+            text: 'Not Tested',
+            level: CheckLevel.idle,
+            message: 'Optional: tap the button and say a few words for 3 seconds.'
+          ),
+        VoiceTest.listening => (text: 'Listening', level: CheckLevel.checking, message: null),
+        VoiceTest.heard => (text: 'Heard You', level: CheckLevel.ok, message: null),
+        VoiceTest.tooQuiet => (
+            text: 'Too Quiet',
+            level: CheckLevel.warn,
+            message: 'We could not hear you. Speak a little louder or move closer, '
+                'then test again. You can still start the session.'
           ),
       };
 

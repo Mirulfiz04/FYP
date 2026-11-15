@@ -159,6 +159,7 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
           onOpenTab: widget.onOpenTab,
           baselineBpm: _c.state.baselineBpm,
           useSensor: _c.state.useSensor,
+          useVoice: _c.state.useVoice,
         ),
       ));
       if (self.isActive) nav.removeRoute(self, ran);
@@ -185,7 +186,11 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
             'complete the checklist, then tap Start Session.\n\nAmber items '
             '(poor signal, an elevated or not-calm baseline, AI or internet '
             'offline) are warnings only — they won\'t stop you, and your AI '
-            'summary is generated later.'),
+            'summary is generated later.\n\nUnder Session options, choose what '
+            'this session uses. Face recognition is always on; the heart-rate '
+            'sensor and voice recognition are optional. If you turn on voice '
+            'recognition we also check the microphone and the voice model, '
+            'and you can test the microphone by saying a few words.'),
         actions: [
           FilledButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Got it')),
@@ -209,12 +214,13 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
                 const SizedBox(height: 14),
                 _overallBanner(s.overall),
                 const SizedBox(height: 18),
-                _sensorToggleCard(s),
+                _optionsCard(s),
                 _cameraCard(s),
                 if (s.useSensor) ...[
                   _sensorCard(s),
                   _baselineCard(s),
                 ],
+                if (s.useVoice) _voiceCard(s),
                 _systemCard(s),
                 const SizedBox(height: 4),
                 _checklistCard(s),
@@ -314,36 +320,88 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
     );
   }
 
-  /// Lets the user run a camera-only session (heart-rate sensor optional).
-  Widget _sensorToggleCard(SessionReadiness s) {
+  /// Lets the user pick what the session uses. The camera is always on (the
+  /// live session is built around it); the sensor and voice are optional.
+  Widget _optionsCard(SessionReadiness s) {
+    Widget option(IconData icon, String title, String subtitle, bool value,
+        ValueChanged<bool>? onChanged) {
+      return SwitchListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        dense: true,
+        activeThumbColor: _accent,
+        value: value,
+        onChanged: onChanged,
+        secondary: Icon(icon, color: _accent, size: 22),
+        title: Text(title,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(fontSize: 12, color: MedsColors.muted)),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: AppCard(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        child: SwitchListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-          activeThumbColor: _accent,
-          value: s.useSensor,
-          onChanged: _c.setUseSensor,
-          secondary: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: _accent.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(11),
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text('Session options',
+                  style:
+                      TextStyle(fontWeight: FontWeight.bold, fontSize: 15.5)),
             ),
-            child: const Icon(Icons.favorite, color: _accent, size: 20),
-          ),
-          title: const Text('Use heart-rate sensor',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-          subtitle: Text(
-            s.useSensor
-                ? 'Camera + ESP32 heart-rate sensor'
-                : 'Camera-only session (no heart-rate sensor)',
-            style: const TextStyle(fontSize: 12, color: MedsColors.muted),
-          ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 2, 8, 4),
+              child: Text(
+                  'Please choose what to use for this session. '
+                  'Face recognition is always on.',
+                  style: TextStyle(fontSize: 12, color: MedsColors.muted)),
+            ),
+            option(Icons.face_retouching_natural, 'Face recognition',
+                'Camera reads your facial emotion', true, null),
+            option(Icons.favorite, 'Heart-rate sensor',
+                'ESP32 sensor + baseline reading', s.useSensor,
+                _c.setUseSensor),
+            option(Icons.mic, 'Voice recognition',
+                '"Are you OK?" voice check-in during the session', s.useVoice,
+                _c.setUseVoice),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _voiceCard(SessionReadiness s) {
+    return ReadinessCheckCard(
+      icon: Icons.mic_none,
+      title: 'Voice Recognition',
+      rows: [
+        ReadinessStatusRow(
+          icon: Icons.mic_none,
+          label: 'Microphone Permission',
+          view: ReadinessView.micPermission(s.micPermission),
+          actionLabel: s.micPermission == MicPermission.denied
+              ? 'Allow Microphone'
+              : null,
+          onAction: _c.retryVoice,
+        ),
+        ReadinessStatusRow(
+          icon: Icons.graphic_eq,
+          label: 'Voice Model',
+          view: ReadinessView.voiceModel(s.voiceModel),
+        ),
+        ReadinessStatusRow(
+          icon: Icons.record_voice_over_outlined,
+          label: 'Voice Test',
+          view: ReadinessView.voiceTest(s.voiceTest),
+          actionLabel: s.voiceTest == VoiceTest.notTested
+              ? 'Test Microphone'
+              : 'Test Again',
+          onAction: _c.testVoice,
+        ),
+      ],
     );
   }
 
