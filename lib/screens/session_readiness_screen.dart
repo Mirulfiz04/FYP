@@ -186,7 +186,13 @@ class _SessionReadinessScreenState extends State<SessionReadinessScreen> {
             'complete the checklist, then tap Start Session.\n\nAmber items '
             '(poor signal, an elevated or not-calm baseline, AI or internet '
             'offline) are warnings only — they won\'t stop you, and your AI '
-            'summary is generated later.'),
+            'summary is generated later.
+
+Under Session options, choose what '
+            'this session uses. Face recognition is always on; the heart-rate '
+            'sensor and voice recognition are optional. If you turn on voice '
+            'recognition we also check the microphone and the voice model, '
+            'and you can test the microphone by saying a few words.'),
         actions: [
           FilledButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Got it')),
