@@ -247,6 +247,52 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
         icon: Icons.signal_cellular_alt);
   }
 
+  /// Microphone state for the voice check-in, with a live level bar while
+  /// it is listening.
+  Widget _micCard() {
+    final (status, color) = !widget.useVoice
+        ? ('Off for this session', MedsColors.muted)
+        : !_c.voiceAvailable
+            ? ('Voice model unavailable', MedsColors.red)
+            : _c.listening
+                ? ('Listening: answer out loud', MedsColors.red)
+                : ('Ready: tap the microphone button', MedsColors.greenDark);
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(widget.useVoice ? Icons.mic : Icons.mic_off,
+                  color: MedsColors.purple, size: 20),
+              const SizedBox(width: 10),
+              const Text('Microphone',
+                  style: TextStyle(fontSize: 12.5, color: MedsColors.muted)),
+              const Spacer(),
+              Text(status,
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+            ],
+          ),
+          if (widget.useVoice && _c.voiceAvailable) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: _c.voiceLevel,
+                minHeight: 8,
+                color: MedsColors.purple,
+                backgroundColor: MedsColors.purple.withValues(alpha: 0.12),
+                semanticsLabel: 'Microphone level',
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   String _hrStatusText() => switch (_c.sensor.sensorQuality) {
         'DISCONNECTED' => 'Sensor disconnected',
         'NO FINGER' => 'No finger detected',
@@ -328,6 +374,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                     sensor: _sensorStatus(),
                     signal: _signalStatus(),
                   ),
+                  const SizedBox(height: 10),
+                  _micCard(),
                   const SizedBox(height: 16),
                   _sessionInfoCard(),
                   const SizedBox(height: 16),
