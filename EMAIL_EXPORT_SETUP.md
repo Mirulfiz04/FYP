@@ -105,6 +105,10 @@ CLI equivalent:
 supabase secrets set EMAIL_PROVIDER=sendgrid SENDGRID_API_KEY=SG.xxxx EMAIL_FROM=you@example.com EMAIL_FROM_NAME=MEDS
 ```
 
+Also run `supabase_setup_hardening.sql` once in the **SQL Editor**: the
+function allows each user 10 emails per hour and counts them there. Until it
+is installed, sending answers "rate limit is not set up". See BACKEND.md.
+
 ---
 
 ## 5. Test it
@@ -126,6 +130,9 @@ supabase secrets set EMAIL_PROVIDER=sendgrid SENDGRID_API_KEY=SG.xxxx EMAIL_FROM
   mode. Verify a domain to email arbitrary recipients.
 - **"You are not signed in"** → the user must be logged in; the app sends their
   auth token automatically.
+- **"Too many emails sent"** → the 10-per-hour limit for that user was
+  reached; it frees up as the hour passes (`MAX_EMAILS_PER_HOUR` in the
+  function).
 - **Nothing arrives** → check **Dashboard → Edge Functions → send-data-email →
   Logs** for the provider's error text.
 

@@ -35,6 +35,10 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 (or Dashboard → **Edge Functions → Secrets**). `SUPABASE_URL` and
 `SUPABASE_ANON_KEY` are provided automatically.
 
+Also run `supabase_setup_hardening.sql` once in the **SQL Editor**: the
+function allows each user 30 AI calls per hour and counts them there. Until it
+is installed, AI requests answer "rate limit is not set up". See BACKEND.md.
+
 ## 4. Check it works
 
 ```bash
