@@ -8,7 +8,6 @@ import '../services/ai_summary_service.dart';
 import '../services/notification_router.dart';
 import '../services/notification_service.dart';
 import '../services/session_alert_controller.dart';
-import '../services/voice_classifier.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/live_session_controller.dart';
 import '../widgets/connection_status_cards.dart';
@@ -164,13 +163,11 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   /// Asks "Are you OK?", records the spoken answer and reports how it sounded.
   Future<void> _voiceCheckIn() async {
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(const SnackBar(
-      content: Text('Are you OK? Answer out loud…'),
-      duration: VoiceClassifier.answerTime,
-    ));
+    // The prompt is shown in the Microphone card, not a snackbar: a snackbar
+    // would cover that card and its level bar while listening.
+    messenger.hideCurrentSnackBar();
     final voice = await _c.voiceCheckIn();
     if (!mounted) return;
-    messenger.hideCurrentSnackBar();
     final mismatch = _c.voiceMismatch;
     messenger.showSnackBar(SnackBar(
       content: Text(voice == null
@@ -255,7 +252,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
         : !_c.voiceAvailable
             ? ('Voice model unavailable', MedsColors.red)
             : _c.listening
-                ? ('Listening: answer out loud', MedsColors.red)
+                ? ('Are you OK? Answer out loud', MedsColors.red)
                 : ('Ready: tap the microphone button', MedsColors.greenDark);
     return AppCard(
       padding: const EdgeInsets.all(12),
