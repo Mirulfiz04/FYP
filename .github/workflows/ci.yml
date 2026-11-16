@@ -104,7 +104,9 @@ jobs:
       - if: env.SUPABASE_ACCESS_TOKEN != ''
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: "latest" asks the GitHub API for the newest release and
+          # failed on its rate limit (issue #16). 3.1.0 deployed fine in run 43710330614.
+          version: 3.1.0
       # Deploys every folder in supabase/functions. Secrets like ANTHROPIC_API_KEY stay as they are.
       - if: env.SUPABASE_ACCESS_TOKEN != ''
         run: supabase functions deploy --yes --project-ref vcgbfnuopsiraxhgwtgb
