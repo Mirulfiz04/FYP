@@ -1,0 +1,11 @@
+{
+  "name": "meds-supabase-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node security_test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.13"
+  }
+}

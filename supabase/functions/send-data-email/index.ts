@@ -12,6 +12,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const MAX_EMAILS_PER_HOUR = 10;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -69,6 +71,20 @@ Deno.serve(async (req: Request) => {
     );
     if (totalBytes > 15 * 1024 * 1024) {
       return json({ error: "Attachments too large (max 15 MB)." }, 413);
+    }
+
+    // --- Per-user hourly cap (take_rate_limit in supabase_setup_hardening.sql).
+    // Stops one account from using the server as a spam relay. Fails closed.
+    const { data: allowed, error: limitErr } = await supabase.rpc(
+      "take_rate_limit",
+      { kind: "email", max_per_hour: MAX_EMAILS_PER_HOUR },
+    );
+    if (limitErr) {
+      console.error(limitErr);
+      return json({ error: "Server rate limit is not set up (run supabase_setup_hardening.sql)." }, 500);
+    }
+    if (!allowed) {
+      return json({ error: "Too many emails sent. Please try again later." }, 429);
     }
 
     // --- Send --------------------------------------------------------------

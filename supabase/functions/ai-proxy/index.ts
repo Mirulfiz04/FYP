@@ -16,6 +16,7 @@ const MODEL = "claude-haiku-5-5";
 // Any signed-in user can call this, so cap what one request can cost.
 const MAX_PROMPT_CHARS = 20_000;
 const MAX_TOKENS = 8000;
+const MAX_REQUESTS_PER_HOUR = 30;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +65,9 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Server AI is not configured (ANTHROPIC_API_KEY)." }, 500);
     }
 
+    const limited = await rateLimited(supabase, "ai", MAX_REQUESTS_PER_HOUR);
+    if (limited) return limited;
+
     // --- Ask Claude ---------------------------------------------------------
     const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
     const msg = await client.messages.create({
@@ -106,6 +110,28 @@ function json(payload: unknown, status: number): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// Per-user hourly cap (take_rate_limit in supabase_setup_hardening.sql).
+// Fails closed: if the limiter is missing, no paid call is made.
+async function rateLimited(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  kind: string,
+  maxPerHour: number,
+): Promise<Response | null> {
+  const { data: allowed, error } = await supabase.rpc("take_rate_limit", {
+    kind,
+    max_per_hour: maxPerHour,
+  });
+  if (error) {
+    console.error(error);
+    return json({ error: "Server rate limit is not set up (run supabase_setup_hardening.sql)." }, 500);
+  }
+  if (!allowed) {
+    return json({ error: "Too many AI requests. Please try again later." }, 429);
+  }
+  return null;
 }
 
 function friendlyClaudeError(status: number | undefined): string {
